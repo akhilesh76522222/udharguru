@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UdharGuru Admin Panel - Real User Data Management</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .controls {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box, .filter-select {
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            min-width: 200px;
+        }
+
+        .search-box:focus, .filter-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+        }
+
+        .user-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #667eea;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .login-container {
+            max-width: 400px;
+            margin: 5rem auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+
+        .login-form input {
+            width: 100%;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .login-form input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .amount {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .debt {
+            color: #dc3545;
+        }
+
+        .credit {
+            color: #28a745;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-box, .filter-select {
+                min-width: auto;
+                width: 100%;
+            }
+
+            table {
+                font-size: 0.875rem;
+            }
+
+            th, td {
+                padding: 0.75rem 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container" style="display: none;">
+        <h2 style="text-align: center; color: #667eea; margin-bottom: 1.5rem;">🔐 Admin Login</h2>
+        <div class="login-form">
+            <input type="email" id="adminEmail" placeholder="Admin Email" required>
+            <input type="password" id="adminPassword" placeholder="Password" required>
+            <button class="btn" onclick="adminLogin()" style="width: 100%; margin-top: 1rem;">Login</button>
+            <div id="loginError" class="error" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Main Admin Panel -->
+    <div id="adminPanel" style="display: none;">
+        <div class="header">
+            <h1>🔐 UdharGuru Admin Panel - Real Data</h1>
+            <button class="btn" onclick="logout()" style="float: right;">Logout</button>
+        </div>
+
+    <div class="container">
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="totalUsers">1,247</h3>
+                <p>कुल यूजर्स</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="activeUsers">892</h3>
+                <p>सक्रिय यूजर्स</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalTransactions">15,643</h3>
+                <p>कुल लेन-देन</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalAmount">₹12,45,890</h3>
+                <p>कुल राशि</p>
+            </div>
+        </div>
+
+        <!-- Search and Filter Controls -->
+        <div class="controls">
+            <input type="text" class="search-box" id="searchInput" placeholder="यूजर खोजें (नाम, फोन नंबर)...">
+            <select class="filter-select" id="statusFilter">
+                <option value="">सभी स्टेटस</option>
+                <option value="active">सक्रिय</option>
+                <option value="inactive">निष्क्रिय</option>
+            </select>
+            <select class="filter-select" id="balanceFilter">
+                <option value="">सभी बैलेंस</option>
+                <option value="positive">क्रेडिट (+)</option>
+                <option value="negative">डेबिट (-)</option>
+                <option value="zero">शून्य</option>
+            </select>
+            <button class="btn" onclick="exportData()">📊 Export Data</button>
+            <button class="btn" onclick="debugDatabase()" style="background: #dc3545;">🔍 Debug DB</button>
+        </div>
+
+        <!-- User Data Table -->
+        <div class="user-table">
+            <table id="userTable">
+                <thead>
+                    <tr>
+                        <th>यूजर ID</th>
+                        <th>नाम</th>
+                        <th>फोन नंबर</th>
+                        <th>रजिस्ट्रेशन तारीख</th>
+                        <th>स्टेटस</th>
+                        <th>कुल बैलेंस</th>
+                        <th>लेन-देन संख्या</th>
+                        <th>अंतिम गतिविधि</th>
+                    </tr>
+                </thead>
+                <tbody id="userTableBody">
+                    <!-- User data will be populated here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+
+    <!-- Message Modal -->
+    <div id="messageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 10px; width: 90%; max-width: 500px;">
+            <h3 style="margin-bottom: 1rem; color: #667eea;">📱 यूजर को मैसेज भेजें</h3>
+            <div style="margin-bottom: 1rem;">
+                <strong>यूजर:</strong> <span id="messageUserName"></span><br>
+                <strong>फोन:</strong> <span id="messageUserPhone"></span>
+            </div>
+            <textarea id="messageText" placeholder="यहाँ अपना मैसेज लिखें..." style="width: 100%; height: 120px; padding: 0.75rem; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 1rem; resize: vertical; margin-bottom: 1rem;"></textarea>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button onclick="closeMessageModal()" style="background: #6c757d; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;">Cancel</button>
+                <button onclick="sendMessage()" style="background: #667eea; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;">📤 Send Message</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration - UdharGuru Project
+        const firebaseConfig = {
+            apiKey: "AIzaSyAw5aNnfG6tu0ZUZ-TWFkRO9yNvPBU3OUY",
+            authDomain: "udharkhata-9199b.firebaseapp.com",
+            projectId: "udharkhata-9199b",
+            storageBucket: "udharkhata-9199b.firebasestorage.app",
+            messagingSenderId: "912326523297",
+            appId: "1:912326523297:web:7512d5fc705188a718b3e0",
+            measurementId: "G-DL0GVPW9C2"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUserData = [];
+        let isAuthenticated = false;
+
+        // Check authentication state
+        auth.onAuthStateChanged((user) => {
+            if (user && isAdminUser(user.email)) {
+                isAuthenticated = true;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                loadRealUserData();
+            } else {
+                isAuthenticated = false;
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('adminPanel').style.display = 'none';
+            }
+        });
+
+        // Admin user check (add your admin emails here)
+        function isAdminUser(email) {
+            const adminEmails = [
+                'admin@udharguru.com',
+                'support@udharguru.com',
+                'admin@udharkhata.com',
+                'support@udharkhata.com',
+                // Add your actual admin email here
+                'your-email@gmail.com'  // Replace with your actual email
+            ];
+            console.log('Checking admin access for:', email);
+            console.log('Admin emails:', adminEmails);
+            return adminEmails.includes(email);
+        }
+
+        // Admin login function
+        async function adminLogin() {
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            if (!email || !password) {
+                errorDiv.textContent = 'Please enter both email and password';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                console.log('Attempting login for:', email);
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                console.log('Login successful for:', userCredential.user.email);
+                
+                if (!isAdminUser(userCredential.user.email)) {
+                    await auth.signOut();
+                    errorDiv.textContent = 'Access denied. Admin privileges required.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                errorDiv.style.display = 'none';
+            } catch (error) {
+                console.error('Login error:', error);
+                errorDiv.textContent = 'Login failed: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Logout function
+        function logout() {
+            auth.signOut();
+        }
+
+        // Load real user data from Firestore
+        async function loadRealUserData() {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading real user data...</td></tr>';
+            try {
+                console.log('Starting to load user data...');
+                
+                // First try to get users collection
+                let usersSnapshot;
+                try {
+                    usersSnapshot = await db.collection('users').get();
+                    console.log('Users found:', usersSnapshot.size);
+                } catch (userError) {
+                    console.log('No users collection, trying profiles...');
+                    // If users collection doesn't exist, try profiles
+                    usersSnapshot = await db.collection('profiles').get();
+                    console.log('Profiles found:', usersSnapshot.size);
+                }
+
+                currentUserData = [];
+
+                for (const doc of usersSnapshot.docs) {
+                    const userData = doc.data();
+                    console.log('Processing user:', doc.id, userData);
+                    
+                    // Calculate user statistics from customers collection
+                    let totalBalance = 0;
+                    let transactionCount = 0;
+                    
+                    try {
+                        // Get customers for this user
+                        const customersSnapshot = await db.collection('customers')
+                            .where('ownerUid', '==', doc.id)
+                            .get();
+                        
+                        console.log('Customers for user', doc.id, ':', customersSnapshot.size);
+
+                        for (const customerDoc of customersSnapshot.docs) {
+                            // Get transactions for each customer
+                            const transactionsSnapshot = await db.collection('customers')
+                                .doc(customerDoc.id)
+                                .collection('transactions')
+                                .get();
+                            
+                            transactionCount += transactionsSnapshot.size;
+                            
+                            transactionsSnapshot.forEach(transDoc => {
+                                const transData = transDoc.data();
+                                const amount = transData.amount || 0;
+                                
+                                // Calculate balance based on transaction type
+                                if (transData.type === 'given' || transData.type === 'lent') {
+                                    totalBalance += amount;
+                                } else if (transData.type === 'received' || transData.type === 'borrowed') {
+                                    totalBalance -= amount;
+                                }
+                            });
+                        }
+                    } catch (customerError) {
+                        console.log('Error loading customers for user', doc.id, ':', customerError);
+                    }
+
+                    // Get last activity
+                    const lastActivity = userData.lastLoginDate || userData.updatedAt || userData.createdAt || new Date();
+
+                    currentUserData.push({
+                        id: doc.id,
+                        name: userData.displayName || userData.name || userData.profileName || 'Unknown',
+                        phone: userData.phoneNumber || userData.phone || 'N/A',
+                        registrationDate: userData.createdAt?.toDate() || userData.createdAt || new Date(),
+                        status: userData.isActive !== false ? 'active' : 'inactive',
+                        balance: totalBalance,
+                        transactionCount: transactionCount,
+                        lastActivity: lastActivity.toDate ? lastActivity.toDate() : new Date(lastActivity)
+                    });
+                }
+
+                console.log('Final user data:', currentUserData);
+                updateStatistics();
+                renderUserTable(currentUserData);
+
+                if (currentUserData.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="error">No user data found. Check Firebase rules and authentication.</td></tr>';
+                }
+
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                tbody.innerHTML = `<tr><td colspan="8" class="error">Error loading data: ${error.message}<br><br>Debug info: Check browser console for details.</td></tr>`;
+            }
+        }
+
+        // Update statistics cards with real data
+        function updateStatistics() {
+            const totalUsers = currentUserData.length;
+            const activeUsers = currentUserData.filter(user => user.status === 'active').length;
+            const totalTransactions = currentUserData.reduce((sum, user) => sum + user.transactionCount, 0);
+            const totalAmount = currentUserData.reduce((sum, user) => sum + Math.abs(user.balance), 0);
+
+            document.getElementById('totalUsers').textContent = totalUsers.toLocaleString('hi-IN');
+            document.getElementById('activeUsers').textContent = activeUsers.toLocaleString('hi-IN');
+            document.getElementById('totalTransactions').textContent = totalTransactions.toLocaleString('hi-IN');
+            document.getElementById('totalAmount').textContent = '₹' + totalAmount.toLocaleString('hi-IN');
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('hi-IN', {
+                style: 'currency',
+                currency: 'INR'
+            }).format(amount);
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('hi-IN');
+        }
+
+        function getBalanceClass(balance) {
+            if (balance > 0) return 'credit';
+            if (balance < 0) return 'debt';
+            return '';
+        }
+
+        function renderUserTable(users = currentUserData) {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = '';
+
+            // Sort users by registration date - newest first
+            const sortedUsers = [...users].sort((a, b) => {
+                const dateA = new Date(a.registrationDate);
+                const dateB = new Date(b.registrationDate);
+                return dateB - dateA; // Descending order (newest first)
+            });
+
+            sortedUsers.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.name}</td>
+                    <td>${user.phone}</td>
+                    <td>${formatDate(user.registrationDate)}</td>
+                    <td><span class="status ${user.status}">${user.status === 'active' ? 'सक्रिय' : 'निष्क्रिय'}</span></td>
+                    <td class="amount ${getBalanceClass(user.balance)}">${formatCurrency(user.balance)}</td>
+                    <td>${user.transactionCount}</td>
+                    <td>${formatDate(user.lastActivity)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function filterUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const balanceFilter = document.getElementById('balanceFilter').value;
+
+            const filteredUsers = currentUserData.filter(user => {
+                const matchesSearch = user.name.toLowerCase().includes(searchTerm) ||
+                                    user.phone.includes(searchTerm);
+
+                const matchesStatus = !statusFilter || user.status === statusFilter;
+
+                let matchesBalance = true;
+                if (balanceFilter === 'positive') matchesBalance = user.balance > 0;
+                else if (balanceFilter === 'negative') matchesBalance = user.balance < 0;
+                else if (balanceFilter === 'zero') matchesBalance = user.balance === 0;
+
+                return matchesSearch && matchesStatus && matchesBalance;
+            });
+
+            renderUserTable(filteredUsers);
+        }
+
+        function exportData() {
+            if (currentUserData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "User ID,Name,Phone,Registration Date,Status,Balance,Transaction Count,Last Activity\n"
+                + currentUserData.map(user => 
+                    `${user.id},${user.name},${user.phone},${formatDate(user.registrationDate)},${user.status},${user.balance},${user.transactionCount},${formatDate(user.lastActivity)}`
+                ).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `udharguru_real_data_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Refresh data function
+        function refreshData() {
+            if (isAuthenticated) {
+                loadRealUserData();
+            }
+        }
+
+        // Auto-refresh every 5 minutes
+        setInterval(refreshData, 5 * 60 * 1000);
+
+        // Message Modal Functions
+        let currentMessageUserId = null;
+
+        function openMessageModal(userId, userName, userPhone) {
+            currentMessageUserId = userId;
+            document.getElementById('messageUserName').textContent = userName;
+            document.getElementById('messageUserPhone').textContent = userPhone;
+            document.getElementById('messageText').value = '';
+            document.getElementById('messageModal').style.display = 'block';
+        }
+
+        function closeMessageModal() {
+            document.getElementById('messageModal').style.display = 'none';
+            currentMessageUserId = null;
+        }
+
+        async function sendMessage() {
+            const messageText = document.getElementById('messageText').value.trim();
+            
+            if (!messageText) {
+                alert('कृपया मैसेज लिखें');
+                return;
+            }
+
+            if (!currentMessageUserId) {
+                alert('यूजर ID नहीं मिली');
+                return;
+            }
+
+            // Check if user is admin
+            const currentUser = auth.currentUser;
+            if (!currentUser || !isAdminUser(currentUser.email)) {
+                alert('❌ Admin access required');
+                return;
+            }
+
+            try {
+                console.log('Sending message to user:', currentMessageUserId);
+                console.log('Message:', messageText);
+                console.log('Admin user:', currentUser.email);
+
+                // Save message to Firestore
+                const messageData = {
+                    userId: currentMessageUserId,
+                    message: messageText,
+                    sentBy: 'admin',
+                    adminEmail: currentUser.email,
+                    sentAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    read: false,
+                    type: 'admin_message'
+                };
+
+                console.log('Saving to adminMessages collection...');
+                const messageRef = await db.collection('adminMessages').add(messageData);
+                console.log('Message saved with ID:', messageRef.id);
+                
+                // Also add to user's notifications
+                try {
+                    console.log('Saving to notifications collection...');
+                    const notifRef = await db.collection('notifications').add({
+                        userId: currentMessageUserId,
+                        title: 'Admin Message',
+                        body: messageText,
+                        type: 'admin_message',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        read: false
+                    });
+                    console.log('Notification saved with ID:', notifRef.id);
+                } catch (notifError) {
+                    console.log('Notification save failed:', notifError);
+                    // Continue even if notification fails
+                }
+
+                alert('✅ मैसेज सफलतापूर्वक भेजा गया!');
+                closeMessageModal();
+                
+            } catch (error) {
+                console.error('Message send error:', error);
+                console.error('Error details:', error.code, error.message);
+                
+                if (error.code === 'permission-denied') {
+                    alert('❌ Permission denied. Please check:\n1. Firebase rules are deployed\n2. You are logged in as admin\n3. Admin email is added to rules');
+                } else {
+                    alert('❌ मैसेज भेजने में error: ' + error.message);
+                }
+            }
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('messageModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeMessageModal();
+            }
+        });
+
+        // Debug database function
+        async function debugDatabase() {
+            console.log('=== DATABASE DEBUG INFO ===');
+            
+            try {
+                // Check all collections
+                const collections = ['users', 'profiles', 'customers', 'appConfig'];
+                
+                for (const collectionName of collections) {
+                    try {
+                        const snapshot = await db.collection(collectionName).limit(5).get();
+                        console.log(`${collectionName} collection:`, snapshot.size, 'documents');
+                        
+                        snapshot.forEach(doc => {
+                            console.log(`  ${doc.id}:`, doc.data());
+                        });
+                    } catch (error) {
+                        console.log(`${collectionName} collection: ERROR -`, error.message);
+                    }
+                }
+
+                // Check current user
+                const currentUser = auth.currentUser;
+                if (currentUser) {
+                    console.log('Current user:', currentUser.email, currentUser.uid);
+                    console.log('Is admin:', isAdminUser(currentUser.email));
+                } else {
+                    console.log('No authenticated user');
+                }
+
+                alert('Debug info logged to console. Press F12 to open developer tools.');
+                
+            } catch (error) {
+                console.error('Debug error:', error);
+                alert('Debug failed: ' + error.message);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', filterUsers);
+        document.getElementById('statusFilter').addEventListener('change', filterUsers);
+        document.getElementById('balanceFilter').addEventListener('change', filterUsers);
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already logged in
+            if (auth.currentUser && isAdminUser(auth.currentUser.email)) {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                loadRealUserData();
+            } else {
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('adminPanel').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
